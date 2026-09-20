@@ -112,11 +112,19 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
 </div>
 
-<div class="bg-slate-950 border border-slate-800 rounded-lg p-2 text-center col-span-2 sm:col-span-1">
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2 text-center">
 
-<div class="text-[10px] text-slate-400 uppercase tracking-wide">Спутник / Рюкзак</div>
+<div class="text-[10px] text-slate-400 uppercase tracking-wide">Спутник</div>
 
 <div id="stat-companion" class="text-xs font-bold text-amber-300 mono mt-1">Нет пса</div>
+
+</div>
+
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2 text-center">
+
+<div class="text-[10px] text-slate-400 uppercase tracking-wide">Рюкзак</div>
+
+<div id="stat-backpack" class="text-xs font-bold text-slate-400 mono mt-1">Не надет</div>
 
 </div>
 
@@ -196,15 +204,33 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
 </button>
 
-<button onclick="restInBunker()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
+<button id="radio-button" onclick="openRadioListeningModal()" class="hidden bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-amber-300 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
+
+📻 Прослушка радио
+
+</button>
+
+<button id="rest-button" onclick="restInBunker()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
 
 🛌 Сон в бункере
+
+</button>
+
+<button id="wait-button" onclick="waitOutside()" class="hidden bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
+
+⏳ Ожидание
 
 </button>
 
 <button onclick="searchCurrentLocation()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
 
 🔎 Обыскать место
+
+</button>
+
+<button id="road-shop-button" onclick="openRoadShop()" class="hidden bg-amber-900/60 hover:bg-amber-800 active:scale-95 border border-amber-700 text-amber-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
+
+🏪 Магазин
 
 </button>
 
@@ -222,7 +248,7 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
 </button>
 
-<button onclick="nextDay()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white py-3 px-4 rounded-lg font-bold shadow-lg shadow-emerald-900/30 transition flex items-center justify-center gap-2 border border-emerald-500/30 cursor-pointer">
+<button id="end-day-button" onclick="nextDay()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white py-3 px-4 rounded-lg font-bold shadow-lg shadow-emerald-900/30 transition flex items-center justify-center gap-2 border border-emerald-500/30 cursor-pointer">
 
 ⏳ Завершить день
 
@@ -397,6 +423,10 @@ weather: "Ясно",
 location: "Бункер (Убежище)",
 
 dogTamed: false,
+dogFollowing: false,
+radioFound: false,
+radioReports: [],
+activeRadioReport: null,
 
 hasBackpackEquipped: false,
 
@@ -410,6 +440,16 @@ bunkerStorage: [],
 
 
 activeLoadout: [],
+
+houseEncounters: {},
+
+activeQuest: null,
+
+generatedLocations: [],
+
+dailyResidents: {},
+
+dailyShopQuests: {},
 
 notesText: localStorage.getItem('bunker_notes') || "Планы на выживание:\n1. Починить радио и поймать сигнал.\n2. Найти металлолом для верстака.\n3. Остерегаться капканов у дома вредной бабки."
 
@@ -438,9 +478,8 @@ localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(slots));
 }
 
 function initializeSaveSystem() {
-let storedSlots = localStorage.getItem(SAVE_STORAGE_KEY);
 let slots = getSaveSlots();
-if (storedSlots === null) {
+if (!slots.some(Boolean)) {
 slots[0] = {
 state: initialStoryState,
 savedAt: 'Предустановленная история',
@@ -525,11 +564,18 @@ newState.fatigue = 0;
 newState.weather = randomWeather();
 newState.location = 'Бункер (Убежище)';
 newState.dogTamed = false;
+newState.dogFollowing = false;
+newState.radioFound = false;
+newState.radioReports = [];
+newState.activeRadioReport = null;
 newState.hasBackpackEquipped = false;
 newState.backpackSlots = 0;
 newState.equippedBackpack = null;
 newState.activeLoadout = [];
 newState.bunkerStorage = [];
+newState.generatedLocations = [];
+newState.dailyResidents = {};
+newState.dailyShopQuests = {};
 newState.searchedLocations = {};
 newState.notesText = 'Планы на выживание:';
 openGame(newState, slotIndex);
@@ -581,6 +627,8 @@ const locationsData = [
 
 { id: 8, name: "Поселок Топар (центр)", desc: "Опасные руины и патрули мародеров." }
 
+,{ id: 9, name: "Малая Токмачка (Магазин)", desc: "Небольшая торговая точка поселка. Здесь каждый день появляются новые поручения.", villageShop: true, shopAvailable: true }
+
 ];
 
 const routeTimes = {
@@ -593,6 +641,7 @@ const routeTimes = {
 '3-4': 10,
 '3-5': 10,
 '3-6': 10,
+'3-9': 10,
 };
 
 const weatherData = {
@@ -650,6 +699,8 @@ const itemCatalog = [
 { name: "Нож", type: "Инструмент", size: 1, desc: "Полезен в быту и на вылазке.", dismantle: [{ name: "Металлический лом", count: 1 }], locations: { bunker: 12, forest: 15, house: 14, village: 14, lake: 8 } },
 { name: "Топор", type: "Оружие", size: 2, desc: "Тяжелый инструмент и оружие.", dismantle: [{ name: "Металлический лом", count: 2 }, { name: "Ткань", count: 1 }], locations: { bunker: 5, forest: 12, house: 10, village: 14, lake: 5 } },
 { name: "Пистолет", type: "Оружие", size: 2, desc: "Опасное оружие. Боеприпасы нужно найти отдельно.", dismantle: [{ name: "Металлический лом", count: 2 }], locations: { bunker: 3, forest: 2, house: 5, village: 12, lake: 2 } },
+ { name: "Ружье", type: "Оружие", size: 3, desc: "Мощное оружие с высокой вероятностью атаки. Боеприпасы нужно найти отдельно.", dismantle: [{ name: "Металлический лом", count: 3 }, { name: "Ткань", count: 1 }], locations: { bunker: 2, forest: 3, house: 6, village: 8, lake: 2 } },
+ { name: "Патроны", type: "Боеприпасы", size: 1, count: 2, desc: "Боеприпасы для пистолета и ружья.", locations: { bunker: 8, forest: 6, house: 9, village: 12, lake: 3 } },
 { name: "Маленький рюкзак", type: "Рюкзак", size: 1, backpackSlots: 1, desc: "Добавляет 1 слот к инвентарю.", locations: { bunker: 10, forest: 8, house: 15, village: 8, lake: 5 } },
 { name: "Средний рюкзак", type: "Рюкзак", size: 2, backpackSlots: 2, desc: "Добавляет 2 слота к инвентарю.", locations: { bunker: 7, forest: 6, house: 10, village: 7, lake: 4 } },
 { name: "Большой рюкзак", type: "Рюкзак", size: 4, backpackSlots: 4, desc: "Добавляет 4 слота к инвентарю.", locations: { bunker: 3, forest: 4, house: 6, village: 5, lake: 3 } },
@@ -680,6 +731,140 @@ if (locationName.includes('озеро')) return 'lake';
 if (locationName.includes('Топар')) return 'village';
 if (locationName.includes('Дом')) return locationName.includes('лесу') ? 'forest' : 'house';
 return 'house';
+}
+
+function getRandomRoadLocationTemplate() {
+let templates = [
+{ name: 'Старая водонапорная башня', desc: 'Ржавая башня возвышается над заросшей дорогой. Внизу виден технический люк.', lootKey: 'forest' },
+{ name: 'Разбитая автозаправка', desc: 'Остов заправки скрывает складские помещения и пустые топливные цистерны.', lootKey: 'house' },
+{ name: 'Лесной кордон', desc: 'Заброшенный пост лесников с кострищем и следами недавней стоянки.', lootKey: 'forest' },
+{ name: 'Старая автобусная остановка', desc: 'Под навесом лежат ржавые сиденья, обрывки газет и чья-то сумка.', lootKey: 'house' },
+{ name: 'Затопленный карьер', desc: 'За бетонным забором темнеет вода, а на берегу остались следы лагеря.', lootKey: 'lake' }
+];
+return templates[randomInt(0, templates.length - 1)];
+}
+
+const roadResidentNames = [
+{ name: 'Странствующий торговец', attitude: 'мирно' },
+{ name: 'Молчаливый механик', attitude: 'нейтрально' },
+{ name: 'Семья переселенцев', attitude: 'мирно' },
+{ name: 'Одинокий разведчик', attitude: 'настороженно' },
+{ name: 'Группа охотников', attitude: 'нейтрально' }
+];
+
+function chooseRoadResidents(location) {
+if (location.residentMode === 'none') return [];
+if (location.residentMode === 'permanent') return [location.permanentResident];
+let residentCount = Math.random() < 0.35 ? 0 : randomInt(1, 2);
+let residents = [];
+while (residents.length < residentCount) {
+let resident = roadResidentNames[randomInt(0, roadResidentNames.length - 1)];
+if (!residents.some(existingResident => existingResident.name === resident.name)) residents.push(resident);
+}
+return residents;
+}
+
+function refreshDailyRoadResidents() {
+ensureExplorationState();
+state.dailyResidents = {};
+state.generatedLocations.forEach(location => {
+state.dailyResidents[location.id] = chooseRoadResidents(location);
+});
+}
+
+function getCurrentRoadLocation() {
+return locationsData.find(location => location.name === state.location && (location.generated || location.villageShop));
+}
+
+function getRoadShopQuests(location) {
+ensureExplorationState();
+let storedQuests = state.dailyShopQuests[location.id];
+if (storedQuests && storedQuests.day === state.day) return storedQuests.quests;
+
+let quests = [];
+let usedItems = [];
+while (quests.length < 3) {
+let quest = generateRandomQuestTemplate({ name: 'Торговец' });
+if (usedItems.includes(quest.itemName)) continue;
+quest.giver = location.name;
+quest.giverName = (state.dailyResidents[location.id] || [])[0]?.name || 'Торговец магазина';
+quest.source = 'shop';
+usedItems.push(quest.itemName);
+quests.push(quest);
+}
+state.dailyShopQuests[location.id] = { day: state.day, quests };
+return quests;
+}
+
+function openRoadShop() {
+let location = getCurrentRoadLocation();
+if (!location || !location.shopAvailable) {
+showModal('Магазина нет', 'В этой локации сегодня нет торговой точки.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+let residents = state.dailyResidents[location.id] || [];
+let quests = getRoadShopQuests(location);
+let residentText = residents.length ? residents.map(resident => `${resident.name} (${resident.attitude})`).join(', ') : 'Сегодня у магазина никого нет';
+let html = `<p class="text-xs text-slate-400">Жители сегодня: <span class="text-amber-300">${residentText}</span></p><div class="space-y-2 mt-3">`;
+quests.forEach((quest, index) => {
+let status = state.activeQuest ? 'Завершите текущее задание' : 'Взять';
+html += `<div class="bg-slate-950 border border-slate-800 p-3 rounded-lg"><div class="font-semibold text-slate-200 text-sm">${quest.itemName} → ${quest.target}</div><div class="text-xs text-slate-400 mt-1">Награда: ${quest.rewardType === 'heal' ? `здоровье +${quest.reward}%` : `${quest.rewardItem} ×${quest.rewardCount}`}</div><button onclick="acceptShopQuest(${index})" class="mt-2 bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">${status}</button></div>`;
+});
+html += '</div>';
+showModal(`Магазин: день ${state.day}`, html, [{ text: 'Закрыть', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+}
+
+function acceptShopQuest(index) {
+let location = getCurrentRoadLocation();
+if (!location) return;
+if (state.activeQuest) {
+showModal('Задание уже взято', 'Сначала завершите текущее поручение.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+let quest = getRoadShopQuests(location)[index];
+if (!quest) return;
+state.activeQuest = quest;
+addLog(`В магазине вы взяли поручение: доставить <b>${quest.itemName}</b> в <b>${quest.target}</b>.`, 'success');
+closeModal();
+updateUI();
+}
+
+function exploreRandomRoad() {
+ensureExplorationState();
+let currentLocationId = getCurrentLocationId();
+if (currentLocationId !== 3 && !locationsData[currentLocationId]?.generated) {
+showModal('Дорога не найдена', 'Исследовать дальнюю дорогу можно из Малой Токмачки или с уже найденной точки.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+
+let searchMinutes = randomInt(70, 110);
+if (!spendActionTime(searchMinutes, 'Исследование дальней дороги')) return;
+
+let template = getRandomRoadLocationTemplate();
+let locationId = locationsData.reduce((highestId, location) => Math.max(highestId, location.id), 0) + 1;
+let routeMinutes = randomInt(60, 140);
+let generatedLocation = {
+id: locationId,
+name: `${template.name} (дорога от Малой Токмачки)`,
+desc: template.desc,
+generated: true,
+lootKey: template.lootKey,
+shopAvailable: Math.random() < 0.45,
+residentMode: Math.random() < 0.25 ? 'none' : Math.random() < 0.35 ? 'permanent' : 'visiting',
+originId: currentLocationId,
+routeMinutes: routeMinutes
+};
+if (generatedLocation.residentMode === 'permanent') generatedLocation.permanentResident = roadResidentNames[randomInt(0, roadResidentNames.length - 1)];
+
+locationsData.push(generatedLocation);
+state.generatedLocations.push(generatedLocation);
+state.dailyResidents[locationId] = chooseRoadResidents(generatedLocation);
+routeTimes[`${currentLocationId}-${locationId}`] = routeMinutes;
+state.location = generatedLocation.name;
+addLog(`Вы исследовали дорогу ${searchMinutes} минут и обнаружили новую локацию: <b>${generatedLocation.name}</b>.`, 'success');
+addLog(`До неё около ${routeMinutes} минут пути. Здесь можно осмотреться и поискать припасы.`);
+triggerLoreEvent(locationId);
+updateUI();
 }
 
 function chooseRandomItem(locationKey, excludedNames = []) {
@@ -719,6 +904,15 @@ return storage;
 
 function ensureExplorationState() {
 if (!state.searchedLocations) state.searchedLocations = {};
+if (!state.houseEncounters) state.houseEncounters = {};
+if (!Object.prototype.hasOwnProperty.call(state, 'activeQuest')) state.activeQuest = null;
+if (!Array.isArray(state.generatedLocations)) state.generatedLocations = [];
+if (!state.dailyResidents || typeof state.dailyResidents !== 'object') state.dailyResidents = {};
+if (!state.dailyShopQuests || typeof state.dailyShopQuests !== 'object') state.dailyShopQuests = {};
+state.generatedLocations.forEach(location => {
+if (!locationsData.some(existingLocation => existingLocation.id === location.id)) locationsData.push(location);
+if (location.originId !== undefined) routeTimes[`${location.originId}-${location.id}`] = location.routeMinutes;
+});
 }
 
 function spendActionTime(minutes, actionName) {
@@ -794,6 +988,17 @@ function getCurrentLoadoutSize() {
 
 return state.activeLoadout.reduce((sum, item) => sum + (item.size || 1), 0);
 
+}
+
+function addFoundItem(item) {
+let itemSize = item.size || 1;
+if (getCurrentLoadoutSize() + itemSize <= getMaxSlots()) {
+state.activeLoadout.push(item);
+addLog(`Предмет <b>${item.name}</b> убран в рюкзак.`, 'success');
+return;
+}
+state.bunkerStorage.push(item);
+addLog(`Для предмета <b>${item.name}</b> не хватило места, он отправлен на склад бункера.`);
 }
 
 
@@ -880,6 +1085,9 @@ function updateUI() {
 
 ensureTimeState();
 
+const radioBtn = document.getElementById('radio-button');
+if (radioBtn) radioBtn.classList.toggle('hidden', !(state.location === 'Бункер (Убежище)' && state.radioFound));
+
 document.getElementById('stat-day').innerText = state.day;
 
 document.getElementById('stat-hunger').innerText = `${state.hunger}%`;
@@ -896,16 +1104,29 @@ document.getElementById('location-badge').innerHTML = `📍 Локация: ${st
 let isInBunker = state.location === 'Бункер (Убежище)';
 document.getElementById('bunker-storage-panel').classList.toggle('hidden', !isInBunker);
 document.getElementById('crafting-button').classList.toggle('hidden', !isInBunker);
+document.getElementById('rest-button').classList.toggle('hidden', !isInBunker);
+document.getElementById('wait-button').classList.toggle('hidden', isInBunker);
+document.getElementById('end-day-button').classList.toggle('hidden', !isInBunker);
+ensureExplorationState();
+let currentRoadLocation = getCurrentRoadLocation();
+document.getElementById('road-shop-button').classList.toggle('hidden', !currentRoadLocation || !currentRoadLocation.shopAvailable);
 
 
 
 const compEl = document.getElementById('stat-companion');
-
-let companionText = state.dogTamed ? "🐕 Пес" : "Нет пса";
-
-if (state.hasBackpackEquipped) companionText += " | 🎒 Рюкзак";
-
-compEl.innerText = companionText;
+if (state.dogTamed) {
+compEl.innerText = state.dogFollowing ? '🐕 Пес рядом' : '🐕 Пес в бункере';
+compEl.title = state.dogFollowing ? 'Кликните, чтобы оставить пса в бункере' : 'Кликните, чтобы взять пса с собой';
+compEl.onclick = () => toggleDogCompanion();
+compEl.className = 'text-xs font-bold text-amber-300 mono mt-1 cursor-pointer underline decoration-dotted';
+} else {
+compEl.innerText = 'Нет пса';
+compEl.title = 'Пока нет прирученного пса';
+compEl.onclick = null;
+compEl.className = 'text-xs font-bold text-slate-400 mono mt-1';
+}
+const backpackEl = document.getElementById('stat-backpack');
+backpackEl.innerText = state.hasBackpackEquipped ? `🎒 ${state.equippedBackpack ? state.equippedBackpack.name : 'Надет'}` : 'Не надет';
 
 
 
@@ -962,6 +1183,10 @@ if (item.type === 'Вода') extra = ` (${item.liters.toFixed(1)} л)`;
 
 
 
+let loadoutAction = item.type === "Рюкзак"
+? `<button onclick="equipBackpackFromLoadout(${idx})" class="bg-slate-900 hover:bg-slate-800 text-amber-400 px-2 py-1 rounded text-[10px] cursor-pointer">Надеть</button>`
+ : `<button onclick="moveToBunker(${idx})" class="bg-slate-900 hover:bg-slate-800 text-cyan-400 px-2 py-1 rounded text-[10px] cursor-pointer">В бункер</button>`;
+
 li.innerHTML = `
 
 <div>
@@ -972,7 +1197,7 @@ li.innerHTML = `
 
 </div>
 
-<button onclick="moveToBunker(${idx})" class="bg-slate-900 hover:bg-slate-800 text-cyan-400 px-2 py-1 rounded text-[10px] cursor-pointer">В бункер</button>
+${loadoutAction}
 
 `;
 
@@ -1012,9 +1237,9 @@ if (item.type === 'Вода') extra = ` (${item.liters.toFixed(1)} л)`;
 
 
 
-let actionBtnText = item.type === "Рюкзак" ? (state.hasBackpackEquipped ? "Надет" : "Надеть") : item.dismantle ? "Разобрать" : item.heal ? "Использовать" : "Взять";
+let actionBtnText = item.type === "Рюкзак" ? (state.hasBackpackEquipped ? "Надет" : "Надеть") : item.heal ? "Использовать" : "Взять";
 
-let actionOnClick = item.type === "Рюкзак" ? `toggleBackpack(${idx})` : item.dismantle ? `disassembleItem(${idx})` : item.heal ? `useMedicine(${idx})` : `moveToLoadout(${idx})`;
+let actionOnClick = item.type === "Рюкзак" ? `toggleBackpack(${idx})` : item.heal ? `useMedicine(${idx})` : `moveToLoadout(${idx})`;
 
 
 
@@ -1106,20 +1331,28 @@ if (state.location !== 'Бункер (Убежище)') {
 showModal("Склад недоступен", "Вернитесь в бункер, чтобы убрать предметы на склад.", [{ text: "ОК", className: "bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
 return;
 }
-
 let item = state.activeLoadout[idx];
-
+if (!item) return;
 state.activeLoadout.splice(idx, 1);
-
 state.bunkerStorage.push(item);
-
 addLog(`Предмет <b>${item.name}</b> возвращен на склад бункера.`);
-
 updateUI();
-
 }
 
-
+function equipBackpackFromLoadout(idx) {
+let item = state.activeLoadout[idx];
+if (!item || item.type !== 'Рюкзак') return;
+if (state.hasBackpackEquipped) {
+showModal("Рюкзак уже надет", "Сначала снимите текущий рюкзак.", [{ text: "ОК", className: "bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+return;
+}
+state.activeLoadout.splice(idx, 1);
+state.hasBackpackEquipped = true;
+state.backpackSlots = item.backpackSlots || 2;
+state.equippedBackpack = item;
+addLog(`Вы надели ${item.name} (+${state.backpackSlots} слота для вылазок).`, 'success');
+updateUI();
+}
 
 function toggleBackpack(idx) {
 if (state.location !== 'Бункер (Убежище)') return;
@@ -1151,11 +1384,24 @@ addLog(`Вы сняли рюкзак и вернули его на склад.`)
 updateUI();
 }
 
-function disassembleItem(idx) {
+function startDisassembly(source, idx) {
 if (state.location !== 'Бункер (Убежище)') return;
-let item = state.bunkerStorage[idx];
+let sourceItems = source === 'loadout' ? state.activeLoadout : state.bunkerStorage;
+let item = sourceItems[idx];
 if (!item || !item.dismantle) return;
-state.bunkerStorage.splice(idx, 1);
+showModal("Разобрать предмет?", `<p>Предмет <b>${item.name}</b> будет уничтожен, а материалы вернутся на склад:</p><p class="mt-2 text-emerald-400">${item.dismantle.map(material => `${material.name} ×${material.count}`).join(', ')}</p>`, [
+{ text: "Разобрать", className: "bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => disassembleItem(source, idx) },
+{ text: "Отмена", className: "bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer" }
+]);
+}
+
+function disassembleItem(source, idx) {
+closeModal();
+if (state.location !== 'Бункер (Убежище)') return;
+let sourceItems = source === 'loadout' ? state.activeLoadout : state.bunkerStorage;
+let item = sourceItems[idx];
+if (!item || !item.dismantle) return;
+sourceItems.splice(idx, 1);
 item.dismantle.forEach(material => {
 state.bunkerStorage.push({ id: Date.now() + Math.random(), name: material.name, size: 1, type: 'Материал', count: material.count, desc: 'Материал после разборки.' });
 });
@@ -1274,9 +1520,8 @@ updateUI();
 function restInBunker() {
 
 if (state.location !== 'Бункер (Убежище)') return;
-ensureTimeState();
-state.timeMinutes += 60;
-state.fatigue = Math.max(0, state.fatigue - 25);
+if (!spendActionTime(60, 'Сон в бункере')) return;
+state.fatigue = Math.max(0, state.fatigue - 45);
 
 state.health = Math.min(100, state.health + 5);
 
@@ -1290,14 +1535,26 @@ updateUI();
 
 }
 
+function waitOutside() {
+if (state.location === 'Бункер (Убежище)') return;
+if (!spendActionTime(15, 'Ожидание')) return;
+
+state.hunger = Math.max(0, state.hunger - 1);
+state.thirst = Math.max(0, state.thirst - 1);
+
+addLog('Вы подождали 15 минут. Сытость и жажда немного снизились, усталость увеличилась.', 'info');
+updateUI();
+}
+
 
 
 function openLocationModal() {
 
 let listHtml = '<div class="space-y-2 max-h-64 overflow-y-auto pr-1">';
 let currentLocationId = getCurrentLocationId();
+ensureExplorationState();
 
-locationsData.filter(loc => loc.id !== currentLocationId && !loc.villageHouse).forEach(loc => {
+locationsData.filter(loc => loc.id !== currentLocationId && !loc.villageHouse && !loc.villageShop).forEach(loc => {
 let routeMinutes = getRouteMinutes(currentLocationId, loc.id);
 let routeLabel = routeMinutes ? `${routeMinutes} мин. в одну сторону` : 'Неизвестно: маршрут появится позже';
 let routeButton = routeMinutes
@@ -1326,7 +1583,11 @@ ${routeButton}
 
 });
 
-if (currentLocationId === 3 || currentLocationId === 7) {
+if (currentLocationId === 3 || locationsData[currentLocationId]?.generated) {
+listHtml += `<div class="bg-emerald-950/40 border border-emerald-800 p-3 rounded-lg flex items-center justify-between gap-2"><div><div class="font-semibold text-emerald-300 text-sm">Исследовать дорогу дальше</div><div class="text-xs text-slate-400">Отправиться дальше от Малой Токмачки и найти случайную локацию.</div><div class="text-[10px] text-emerald-400 mt-1">70–110 минут · новая точка появится на карте</div></div><button onclick="exploreRandomRoad()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer">Исследовать</button></div>`;
+}
+
+if (currentLocationId === 7) {
 listHtml += `<div class="bg-slate-950 border border-slate-800 p-3 rounded-lg flex items-center justify-between gap-2 opacity-70"><div><div class="font-semibold text-slate-400 text-sm">Неизвестно</div><div class="text-xs text-slate-500">Дальняя дорога скрыта туманом войны.</div></div><span class="text-xs text-slate-500">Будущий патч</span></div>`;
 }
 
@@ -1338,7 +1599,7 @@ showModal("Выбор маршрута вылазки", listHtml, [{ text: "За
 
 function openVillageNavigationModal() {
 let listHtml = '<div class="space-y-2 max-h-64 overflow-y-auto pr-1">';
-locationsData.filter(loc => loc.villageHouse).forEach(loc => {
+locationsData.filter(loc => loc.villageHouse || loc.villageShop).forEach(loc => {
 listHtml += `
 <div class="bg-slate-950 border border-slate-800 p-3 rounded-lg flex items-center justify-between gap-2 hover:border-slate-600 transition">
 <div><div class="font-semibold text-slate-200 text-sm">${loc.name}</div><div class="text-xs text-slate-400">${loc.desc}</div></div>
@@ -1350,6 +1611,73 @@ showModal("Малая Токмачка: выбор дома", listHtml, [{ text:
 }
 
 
+
+function getDogFollowReasons() {
+let reasons = [];
+if (state.hunger < 25) reasons.push('голоден');
+if (state.thirst < 20) reasons.push('жаждет');
+if (state.health < 30) reasons.push('ранен');
+if (state.fatigue > 75) reasons.push('слишком устал');
+return reasons;
+}
+
+function generateRadioThreat() {
+let targets = [
+{ name: 'Малая Токмачка (поселок)', danger: 'рейдеры', civilians: 'мирные люди' },
+{ name: 'Справа: Дом в лесу', danger: 'мародеры', civilians: 'жители в доме' },
+{ name: 'Лесное озеро (причал, лодка и дорога)', danger: 'банда мародеров', civilians: 'рыбаки и путники' },
+{ name: 'Слева: Одинокий дом', danger: 'рейдеры', civilians: 'тревожные жители' }
+];
+let target = targets[randomInt(0, targets.length - 1)];
+let dayOffset = randomInt(0, 2);
+let hour = randomInt(18, 22);
+return {
+ id: Date.now() + Math.random(),
+ target: target.name,
+ danger: target.danger,
+ civilians: target.civilians,
+ timeLabel: `День ${state.day + dayOffset}, ${String(hour).padStart(2, '0')}:00`,
+ summary: `${target.danger} нацелились на ${target.name} примерно в ${String(hour).padStart(2, '0')}:00.`
+};
+}
+
+function resolveRadioDecision(choice, report) {
+state.activeRadioReport = null;
+state.radioReports = state.radioReports.filter(item => item.id !== report.id);
+if (choice === 'warn') {
+addLog(`Вы решили предупредить людей в <b>${report.target}</b>. К радиосигналу вы отнеслись серьезно и готовы вмешаться.`, 'success');
+showModal('Вы отправляетесь на помощь', `<p>Сигнал по радио говорил о том, что <b>${report.target}</b> в опасности.</p><p class="mt-3 text-amber-300">Вы сможете попытаться вовремя предупредить людей, но путь будет небезопасен.</p>`, [{ text: 'Хорошо', className: 'bg-amber-700 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+if (choice === 'defend') {
+state.health = Math.max(0, state.health - 8);
+addLog(`Вы решили остаться и защищать людей в <b>${report.target}</b>. Это рискованно, здоровье -8%.`, 'danger');
+showModal('План обороны', `<p>Вы остаётесь на позиции и готовитесь к обороне в ${report.target}.</p><p class="mt-3 text-rose-300">Если рейдеры придут, шансы на выживание будут ниже, но вы можете спасти местных.</p>`, [{ text: 'Принять риск', className: 'bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+addLog(`Вы проигнорировали сигнал о рейде в <b>${report.target}</b>, чтобы не рисковать и сохранить силы.`, 'info');
+showModal('Решение принято', `<p>Вы решили не вмешиваться.</p><p class="mt-3 text-slate-300">Сигнал исчез в шуме, но вы сохранили ресурсы и не ввязались в опасную схватку.</p>`, [{ text: 'Понятно', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+}
+
+function openRadioListeningModal() {
+if (state.location !== 'Бункер (Убежище)') {
+showModal('Радио недоступно', 'Прослушка возможна только находясь в бункере.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+if (!state.radioFound) {
+showModal('Радио не найдено', 'Сначала найдите и принесите в бункер радио, чтобы прослушать новости.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+if (!state.radioReports.length) state.radioReports.push(generateRadioThreat());
+let report = state.activeRadioReport || state.radioReports[0];
+state.activeRadioReport = report;
+let html = `<p>Вы ловите слабо работающий сигнал и слышите:</p><p class="mt-2 text-amber-300 font-semibold">${report.summary}</p><p class="mt-2 text-xs text-slate-400">Время: ${report.timeLabel}. В зоне уже есть ${report.civilians}.</p>`;
+showModal('Прослушка радио', html, [
+{ text: 'Пойти предупредить', className: 'bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: () => resolveRadioDecision('warn', report) },
+{ text: 'Остаться и защищать', className: 'bg-amber-700 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: () => resolveRadioDecision('defend', report) },
+{ text: 'Игнорировать', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: () => resolveRadioDecision('ignore', report) }
+]);
+}
 
 function travelTo(locId) {
 
@@ -1366,11 +1694,26 @@ showModal("Маршрут неизвестен", "Эта дорога скрыт
 return;
 }
 
+if (state.dogTamed && state.dogFollowing && !target.village && !target.villageHouse) {
+const reasons = getDogFollowReasons();
+if (reasons.length > 0) {
+state.dogFollowing = false;
+addLog(`Пес отказался идти с вами: он ${reasons.join(', ')}. Он остался в бункере.`, 'danger');
+}
+}
+
 let travelMinutes = addTravelEffects(baseMinutes);
+
+if (state.dogTamed && state.dogFollowing && !target.village && !target.villageHouse) {
+const noisePenalty = state.fatigue > 60 ? 4 : 3;
+state.fatigue = Math.min(100, state.fatigue + noisePenalty);
+addLog(`Пес бегает рядом и шумит на тропе. (+${noisePenalty}% усталости, шум снижает скрытность)`, 'danger');
+}
 
 state.location = target.name;
 
 addLog(`Переход занял ${travelMinutes} минут. Вы прибыли на локацию: <b>${target.name}</b>.`);
+handleQuestArrival(target.name);
 
 if (state.timeMinutes >= 1320 || state.timeMinutes < 360) {
 let nightRisk = 0.45 + weatherData[state.weather].risk;
@@ -1392,6 +1735,8 @@ return;
 
 triggerLoreEvent(locId);
 
+if (!target.village && !target.villageHouse && !target.villageShop && !target.name.includes('Дом') && Math.random() < 0.35) openRoadEncounter();
+
 updateUI();
 
 }
@@ -1404,14 +1749,15 @@ return foundLocation ? foundLocation.id : 0;
 function searchCurrentLocation() {
 ensureExplorationState();
 let locationName = state.location;
-let locationKey = getLocationLootKey(locationName);
+let generatedLocation = locationsData.find(location => location.name === locationName && location.generated);
+let locationKey = generatedLocation?.lootKey || getLocationLootKey(locationName);
 
 if (locationName.includes('Бункер')) {
 if (!state.searchedLocations[locationName]) {
 let searchMinutes = randomInt(30, 60);
 if (!spendActionTime(searchMinutes, 'Обыск бункера')) return;
 if (state.bunkerStorage.length === 0) {
-state.bunkerStorage.push(...searchBunkerStorage());
+searchBunkerStorage().forEach(addFoundItem);
 }
 state.searchedLocations[locationName] = true;
 addLog(`Вы перебрали завалы в бункере за ${searchMinutes} минут и нашли еду, воду и два случайных предмета.`, 'success');
@@ -1440,7 +1786,7 @@ let foundNames = [];
 for (let index = 0; index < itemCount; index++) {
 let foundItem = chooseRandomItem(locationKey, foundNames);
 foundNames.push(foundItem.name);
-state.bunkerStorage.push(foundItem);
+addFoundItem(foundItem);
 addLog(`В локации найден предмет: <b>${foundItem.name}</b>.`, 'success');
 }
 updateUI();
@@ -1451,6 +1797,26 @@ updateUI();
 function triggerLoreEvent(locId) {
 let targetName = locationsData[locId].name;
 let roll = Math.random();
+
+if (locationsData[locId].villageShop) {
+addLog('Вы вошли в магазин Малой Токмачки. На прилавке лежат припасы, а на стене вывешены свежие поручения.', 'success');
+openRoadShop();
+return;
+}
+
+if (locationsData[locId].generated) {
+let events = [
+`На новой точке слышны голоса вдалеке. Вы не знаете, кто обосновался здесь раньше вас.`,
+`В пыли видны свежие следы шин. Кто-то пользуется этой дорогой и может вернуться.`,
+`Место кажется пустым, но среди обломков заметны признаки недавнего лагеря.`
+];
+addLog(events[randomInt(0, events.length - 1)], 'info');
+let residents = state.dailyResidents[locationsData[locId].id] || [];
+if (residents.length) addLog(`Сегодня здесь находятся: <b>${residents.map(resident => resident.name).join(', ')}</b>.`);
+else if (locationsData[locId].residentMode === 'none') addLog('У этой точки нет постоянных жителей, и сегодня никто не пришёл.', 'info');
+else addLog('Сегодняшние посетители ещё не появились. Возможно, они придут позже.', 'info');
+return;
+}
 
 if (targetName.includes("Дом 1 с капкан")) {
 if (roll > 0.4) {
@@ -1483,9 +1849,264 @@ addLog(`Патруль мародеров открыл стрельбу! Вы ч
 state.health -= 20;
 }
 }
+if (targetName.includes("Дом") && !targetName.includes("Дом 3 с псом")) openNpcEncounter(targetName);
+}
+
+function getNpcProfile(locationName) {
+let profiles = {
+"Справа: Дом в лесу": { name: "Охотник", attitude: "агрессивно", attack: 0.58, listen: 0.42, escape: 0.55, canQuest: false },
+"Слева: Одинокий дом": { name: "Одинокий житель", attitude: "нейтрально", attack: 0.45, listen: 0.65, escape: 0.72, canQuest: true },
+"Малая Токмачка (Дом 1 с капкан)": { name: "Хозяин с капканом", attitude: "агрессивно", attack: 0.62, listen: 0.38, escape: 0.5, canQuest: false },
+"Малая Токмачка (Дом 2 'Баба Баджа')": { name: "Жительница дома", attitude: "мирно", attack: 0.35, listen: 0.82, escape: 0.9, canQuest: true }
+};
+return profiles[locationName] || { name: "Незнакомец", attitude: "нейтрально", attack: 0.45, listen: 0.6, escape: 0.7, canQuest: true };
+}
+
+function getCombatWeapon() {
+let weapon = state.activeLoadout.find(item => item.name === 'Ружье' || item.name === 'Пистолет' || item.name === 'Нож');
+if (!weapon) return null;
+let ammo = state.activeLoadout.find(item => item.name === 'Патроны');
+return { item: weapon, ammo: ammo && ammo.count ? ammo.count : 0 };
+}
+
+function consumeCombatAmmo() {
+let ammo = state.activeLoadout.find(item => item.name === 'Патроны');
+if (!ammo || !ammo.count) return false;
+ammo.count--;
+if (ammo.count <= 0) state.activeLoadout = state.activeLoadout.filter(item => item !== ammo);
+return true;
+}
+
+function openNpcEncounter(locationName) {
+ensureExplorationState();
+if (state.houseEncounters[locationName]) return;
+state.houseEncounters[locationName] = true;
+let npc = getNpcProfile(locationName);
+let html = `<p>В доме вы заметили персонажа: <b>${npc.name}</b>.</p><p class="mt-2 text-xs text-slate-400">Настрой: <span class="text-amber-300">${npc.attitude}</span>. Выберите действие.</p>`;
+let encounterButtons = [
+{ text: "Напасть", className: "bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => attackNpc(npc) },
+{ text: "Подойти и подслушать", className: "bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => listenToNpc(npc) },
+{ text: "Незаметно уйти", className: "bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => sneakAwayFromNpc(npc) }
+];
+if (npc.canQuest && !state.activeQuest) encounterButtons.splice(1, 0, { text: "Поговорить о задании", className: "bg-amber-700 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => offerDeliveryQuest(npc) });
+showModal("Встреча в доме", html, encounterButtons);
+}
+
+function generateRandomQuestTemplate(npc) {
+let possibleTargets = [
+"Малая Токмачка (Дом 2 'Баба Баджа')",
+"Слева: Одинокий дом",
+"Справа: Дом в лесу",
+"Лесное озеро (причал, лодка и дорога)",
+"Малая Токмачка (поселок)"
+].filter(target => target !== state.location);
+let target = possibleTargets[randomInt(0, Math.max(0, possibleTargets.length - 1))] || "Малая Токмачка (поселок)";
+
+let templates = [
+{ itemName: "Бинты", rewardType: "heal", reward: randomInt(15, 30), rewardItem: null, rewardCount: 0 },
+{ itemName: "Патроны", rewardType: "material", reward: 0, rewardItem: "Металлический лом", rewardCount: randomInt(1, 3) },
+{ itemName: "Консервы", rewardType: "material", reward: 0, rewardItem: "Ткань", rewardCount: randomInt(1, 2) },
+{ itemName: "Фонарик", rewardType: "material", reward: 0, rewardItem: "Батарейки", rewardCount: randomInt(1, 2) },
+{ itemName: "Бутыль воды", rewardType: "material", reward: 0, rewardItem: "Изолента", rewardCount: randomInt(1, 2) }
+];
+let selected = templates[randomInt(0, templates.length - 1)];
+return {
+giver: state.location,
+ giverName: npc.name,
+ target,
+ itemName: selected.itemName,
+ rewardType: selected.rewardType,
+ reward: selected.reward || 0,
+ rewardItem: selected.rewardItem || null,
+ rewardCount: selected.rewardCount || 0
+};
+}
+
+function offerDeliveryQuest(npc) {
+if (state.activeQuest) {
+showModal("Задание уже взято", "Сначала завершите текущее поручение.", [{ text: "ОК", className: "bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+return;
+}
+let quest = generateRandomQuestTemplate(npc);
+state.activeQuest = quest;
+addLog(`${npc.name} попросил доставить предмет <b>${quest.itemName}</b> в локацию <b>${quest.target}</b>, а затем вернуться.`, 'success');
+showModal("Новое поручение", `<p>Доставьте <b>${quest.itemName}</b> в локацию:</p><p class="mt-2 text-cyan-400">${quest.target}</p><p class="mt-2 text-xs text-slate-400">После доставки вернитесь к ${npc.name}.</p>`, [{ text: "Принять", className: "bg-amber-700 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer" }]);
+}
+
+function takeQuestItem(itemName) {
+let item = state.activeLoadout.find(candidate => candidate.name === itemName);
+if (!item) return false;
+if (item.count && item.count > 1) item.count--;
+else state.activeLoadout = state.activeLoadout.filter(candidate => candidate !== item);
+return true;
+}
+
+function handleQuestArrival(locationName) {
+let quest = state.activeQuest;
+if (!quest) return;
+if (!quest.delivered && locationName === quest.target) {
+if (!takeQuestItem(quest.itemName)) {
+addLog(`Вы прибыли к получателю, но у вас нет предмета <b>${quest.itemName}</b>.`, 'danger');
+return;
+}
+quest.delivered = true;
+if (quest.rewardType === 'heal') {
+state.health = Math.min(100, state.health + quest.reward);
+addLog(`Доставка выполнена. Получатель оказал вам помощь: здоровье +${quest.reward}%.`, 'success');
+} else {
+addLog(`Доставка выполнена. Теперь вернитесь к ${quest.giverName}, чтобы получить награду.`, 'success');
+}
+return;
+}
+if (quest.delivered && locationName === quest.giver) {
+if (quest.rewardType === 'material') {
+state.bunkerStorage.push({ id: Date.now() + Math.random(), name: quest.rewardItem, size: 1, type: 'Материал', count: quest.rewardCount, desc: 'Награда за поручение.' });
+addLog(`Поручение завершено. Вы получили: <b>${quest.rewardItem} ×${quest.rewardCount}</b>.`, 'success');
+}
+state.activeQuest = null;
+}
+}
+
+function attackNpc(npc) {
+let combat = getCombatWeapon();
+if (!combat) {
+state.houseEncounters[state.location] = false;
+showModal("Нет оружия", "Для нападения нужен нож, пистолет или ружье.", [{ text: "ОК", className: "bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+return;
+}
+let weaponName = combat.item.name;
+let chance = weaponName === 'Нож' ? 0.62 : weaponName === 'Пистолет' ? 0.7 : 0.82;
+if (state.dogTamed && state.dogFollowing) {
+let dogBonus = 0.08;
+if (state.hunger < 35) dogBonus -= 0.02;
+if (state.thirst < 30) dogBonus -= 0.02;
+if (state.fatigue > 70) dogBonus -= 0.03;
+chance += Math.max(0.02, Math.min(0.08, dogBonus));
+}
+if (weaponName !== 'Нож') {
+if (!combat.ammo) {
+state.houseEncounters[state.location] = false;
+showModal("Нет патронов", `${weaponName} нельзя использовать без патронов.`, [{ text: "ОК", className: "bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+return;
+}
+chance += Math.min(0.1, combat.ammo * 0.025);
+consumeCombatAmmo();
+}
+chance += npc.attitude === 'мирно' ? 0.08 : npc.attitude === 'агрессивно' ? -0.1 : 0;
+let attackSuccess = Math.random() < chance;
+let defenseChance = weaponName === 'Ружье' ? 0.7 : weaponName === 'Пистолет' ? 0.58 : 0.45;
+defenseChance += combat.ammo ? Math.min(0.08, combat.ammo * 0.02) : 0;
+const isAggressiveHouseFight = state.location.includes('Дом 1 с капкан') || npc.name === 'Хозяин с капканом';
+state.houseEncounters[state.location] = 'hostile';
+if (attackSuccess) {
+let fightSummary = isAggressiveHouseFight
+? `Атака прошла успешно! Вы врываетесь в дом, резко сближаетесь с ${npc.name} и бьёте ${weaponName.toLowerCase()} по ближайшей цели. Он отшатывается, задевает стол, и в тусклом свете вы ловите запах старого дыма и крови.`
+: `Атака прошла успешно! Вы атаковали ${npc.name} с помощью ${weaponName}.`;
+addLog(fightSummary, 'success');
+showModal(isAggressiveHouseFight ? "Бой в доме" : "Атака успешна", isAggressiveHouseFight
+? `<p>Шанс удара составил ${Math.round(chance * 100)}%.</p><p class="mt-2 text-slate-300">Вы резко вошли в дом, хлынувший свет от вашего оружия застал ${npc.name} врасплох. Он отступил к стене, задел полку и заморгал, пытаясь поправить равновесие.</p><p class="mt-2 text-amber-300">Три секунды хаоса — и он уже не контролирует ситуацию.</p>`
+: `Шанс атаки был ${Math.round(chance * 100)}%. Вы заставили персонажа отступить.`, [{ text: "Продолжить", className: "bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+} else {
+let defended = Math.random() < defenseChance;
+let damage = defended ? 8 : npc.attitude === 'агрессивно' ? 24 : 16;
+if (state.dogTamed && state.dogFollowing) {
+let dogBlockChance = 0.16;
+if (state.health > 60) dogBlockChance += 0.06;
+if (state.fatigue > 60) dogBlockChance -= 0.04;
+if (state.hunger < 35 || state.thirst < 30) dogBlockChance -= 0.04;
+dogBlockChance = Math.max(0.08, Math.min(0.24, dogBlockChance));
+if (Math.random() < dogBlockChance) {
+let blocked = Math.min(damage, 9);
+damage = Math.max(0, damage - blocked);
+addLog(isAggressiveHouseFight ? `Вы врезались в темный коридор, но ${npc.name} успел контратаковать. Пес бросился на защиту, и часть удара ушла в сторону. Здоровье -${damage}%.` : `Пес бросился на защиту: часть удара поглощена. Здоровье -${damage}%.`, 'success');
+} else {
+addLog(isAggressiveHouseFight ? `В доме всё произошло мгновенно: ${npc.name} пошёл в ближний бой, врезал в плечо и откинул вас к двери. Здоровье -${damage}%.` : `${npc.name} отбился. Здоровье -${damage}%.`, 'danger');
+}
+} else {
+addLog(isAggressiveHouseFight ? `Бой в доме складывался неудачно: ${npc.name} оттолкнул вас в темноту, и удар пришёлся в грудь. Здоровье -${damage}%.` : `${npc.name} отбился. Здоровье -${damage}%.`, 'danger');
+}
+state.health = Math.max(0, state.health - damage);
+showModal(isAggressiveHouseFight ? "Бой в доме" : "Атака не удалась", isAggressiveHouseFight
+? `<p>Шанс защиты противника составил ${Math.round(defenseChance * 100)}%.</p><p class="mt-2 text-slate-300">Это был короткий, грязный бой в тесном помещении. ${npc.name} успел ответить в упор, и вы едва удержали равновесие на полу.</p><p class="mt-2 text-rose-300">Почти момент — и вы уже на ногах, но раненый.</p>`
+: `Шанс защиты противника был ${Math.round(defenseChance * 100)}%.`, [{ text: "ОК", className: "bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+}
+updateUI();
+}
+
+function listenToNpc(npc) {
+let chance = npc.listen - Math.min(0.15, state.fatigue / 700);
+if (state.dogTamed && state.dogFollowing) chance -= 0.04;
+if (Math.random() < chance) {
+addLog(`Вы подслушали разговор ${npc.name} и узнали полезные сведения.`, 'success');
+showModal("Разговор услышан", `Удалось подслушать разговор. Шанс успеха: ${Math.round(chance * 100)}%.`, [{ text: "ОК", className: "bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+} else {
+let damage = npc.attitude === 'агрессивно' ? 12 : 5;
+state.health = Math.max(0, state.health - damage);
+addLog(`${npc.name} заметил вас во время подслушивания. Здоровье -${damage}%.`, 'danger');
+showModal("Вас заметили", `Подслушивание провалилось. Шанс успеха был ${Math.round(chance * 100)}%.`, [{ text: "ОК", className: "bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+}
+updateUI();
+}
+
+function sneakAwayFromNpc(npc) {
+let chance = npc.escape - Math.min(0.2, state.fatigue / 500);
+if (state.dogTamed && state.dogFollowing) chance -= 0.08;
+if (state.flashlightOn) chance -= 0.08;
+if (Math.random() < chance) {
+addLog(`Вы незаметно ушли от встречи с ${npc.name}.`, 'success');
+showModal("Удалось уйти", `Вы покинули дом незаметно. Шанс успеха: ${Math.round(chance * 100)}%.`, [{ text: "ОК", className: "bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+} else {
+let damage = npc.attitude === 'агрессивно' ? 15 : 7;
+state.health = Math.max(0, state.health - damage);
+addLog(`Вас заметили при уходе. Здоровье -${damage}%.`, 'danger');
+showModal("Уход не удался", `Шанс незаметно уйти был ${Math.round(chance * 100)}%.`, [{ text: "ОК", className: "bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold" }]);
+}
+updateUI();
+}
+
+function openRoadEncounter() {
+let encounters = [
+{ name: "Группа путников", kind: "люди", attitude: "мирно", attack: 0.35, listen: 0.75, escape: 0.88 },
+{ name: "Одинокий следопыт", kind: "человек", attitude: "нейтрально", attack: 0.5, listen: 0.58, escape: 0.76 },
+{ name: "Стая одичавших собак", kind: "животные", attitude: "агрессивно", attack: 0.68, listen: 0.32, escape: 0.5 },
+{ name: "Дикий кабан", kind: "животное", attitude: "агрессивно", attack: 0.74, listen: 0.25, escape: 0.58 },
+{ name: "Олень у обочины", kind: "животное", attitude: "мирно", attack: 0.3, listen: 0.8, escape: 0.92 }
+];
+let encounter = encounters[randomInt(0, encounters.length - 1)];
+let html = `<p>На дороге вам встретились: <b>${encounter.name}</b>.</p><p class="mt-2 text-xs text-slate-400">Это ${encounter.kind}. Поведение: <span class="text-amber-300">${encounter.attitude}</span>.</p>`;
+showModal("Встреча на дороге", html, [
+{ text: "Напасть", className: "bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => attackNpc(encounter) },
+{ text: "Подойти и прислушаться", className: "bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => listenToNpc(encounter) },
+{ text: "Незаметно уйти", className: "bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer", onClick: () => sneakAwayFromNpc(encounter) }
+]);
 }
 
 
+
+function toggleDogCompanion() {
+if (!state.dogTamed) return;
+if (state.dogFollowing) {
+state.dogFollowing = false;
+addLog('Пес остался в бункере и будет ждать вас там.', 'success');
+updateUI();
+return;
+}
+const reasons = getDogFollowReasons();
+if (reasons.length > 0) {
+let reasonText = reasons.map(item => {
+if (item === 'голоден') return 'голод';
+if (item === 'жаждет') return 'жажда';
+if (item === 'ранен') return 'ранение';
+if (item === 'слишком устал') return 'усталость';
+return item;
+}).join(', ');
+showModal('Пес отказывается идти', `Сейчас собака не хочет идти с вами: ${reasonText}. Лучше дать ей отдых и немного еды/воды.`, [{ text: 'ОК', className: 'bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
+return;
+}
+state.dogFollowing = true;
+addLog('Пес идет с вами на вылазку. Его шум и помощь в бою будут заметны, но это полезное сопровождение.', 'success');
+updateUI();
+}
 
 function tameDog() {
 
@@ -1504,8 +2125,9 @@ state.bunkerStorage = state.bunkerStorage.filter(i => i !== foodItem);
 }
 
 state.dogTamed = true;
+state.dogFollowing = false;
 
-addLog(`Пес съел консерву и теперь следует за вами!`, 'success');
+addLog(`Пес съел консерву и теперь будет ждать вас в бункере.`, 'success');
 
 updateUI();
 
@@ -1549,6 +2171,21 @@ html += `
 `;
 
 });
+
+let dismantleItems = [
+...state.bunkerStorage.map((item, idx) => ({ item, source: 'storage', idx })),
+...state.activeLoadout.map((item, idx) => ({ item, source: 'loadout', idx }))
+].filter(entry => entry.item.dismantle);
+
+html += '<div class="border-t border-slate-800 pt-3 mt-4"><div class="font-bold text-cyan-400 mb-2">Разбор предметов</div>';
+if (dismantleItems.length === 0) {
+html += '<div class="text-xs text-slate-500">Нет предметов, которые можно разобрать.</div>';
+} else {
+dismantleItems.forEach(({ item, source, idx }) => {
+html += `<div class="bg-slate-950 border border-slate-800 p-3 rounded-lg flex items-center justify-between mb-2"><div><div class="font-bold text-slate-200">${item.name}</div><div class="text-xs text-slate-400">Материалы: ${item.dismantle.map(material => `${material.name} ×${material.count}`).join(', ')}</div></div><button onclick="startDisassembly('${source}', ${idx})" class="bg-rose-900 hover:bg-rose-800 text-rose-200 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Разобрать</button></div>`;
+});
+}
+html += '</div>';
 
 html += '</div>';
 
@@ -1595,6 +2232,11 @@ updateUI();
 
 function nextDay() {
 
+if (state.location !== 'Бункер (Убежище)') {
+showModal('Нельзя завершить день', 'Завершить день можно только вернувшись в бункер.', [{ text: 'ОК', className: 'bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+
 state.day++;
 state.timeMinutes = 360;
 state.fatigue = Math.max(0, state.fatigue - 35);
@@ -1603,6 +2245,8 @@ state.weather = randomWeather();
 state.hunger = Math.max(0, state.hunger - 15);
 
 state.thirst = Math.max(0, state.thirst - 20);
+state.dailyShopQuests = {};
+refreshDailyRoadResidents();
 
 
 
