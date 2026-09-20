@@ -32,6 +32,43 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
 ::-webkit-scrollbar-thumb:hover { background: #334155; }
 
+.map-board { background: radial-gradient(circle at 50% 35%, rgba(30, 64, 175, .18), transparent 58%), #020617; }
+.map-route { stroke: #334155; stroke-width: 2; stroke-dasharray: 6 5; }
+.map-route.known { stroke: #0891b2; stroke-dasharray: none; }
+.map-node { transform: translate(-50%, -50%); width: 88px; min-width: 0; overflow-wrap: anywhere; }
+.map-node.current { box-shadow: 0 0 0 2px #f59e0b, 0 0 18px rgba(245, 158, 11, .35); }
+.map-node.unknown { color: #64748b; border-color: #334155; background: #0f172a; }
+.modal-scroll { max-height: calc(100vh - 2rem); overflow-y: auto; overscroll-behavior: contain; }
+#modal-content {
+	max-width: min(92vw, 760px);
+	width: min(92vw, 760px);
+}
+.map-node {
+	transform: translate(-50%, -50%);
+	width: 120px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: 11px;
+	line-height: 1.2;
+}
+.map-node .map-label {
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.2;
+}
+.map-node .map-meta {
+	font-size: 9px;
+	line-height: 1.1;
+}
+@media (max-width: 640px) {
+	.map-node { width: 90px; }
+	.map-node .map-label { font-size: 10px; }
+	.map-node .map-meta { font-size: 8px; }
+}
+@media (max-width: 480px) {
+	.map-node { width: 82px; }
+}
+
 </style>
 
 </head>
@@ -204,6 +241,12 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
 </button>
 
+<button id="cook-button" onclick="cookFish()" class="hidden bg-orange-900/70 hover:bg-orange-800 active:scale-95 border border-orange-700 text-orange-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
+
+🍳 Приготовить рыбу
+
+</button>
+
 <button id="radio-button" onclick="openRadioListeningModal()" class="hidden bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-amber-300 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
 
 📻 Прослушка радио
@@ -219,6 +262,12 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 <button id="wait-button" onclick="waitOutside()" class="hidden bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
 
 ⏳ Ожидание
+
+</button>
+
+<button id="fish-button" onclick="fishAtLake()" class="hidden bg-cyan-900/70 hover:bg-cyan-800 active:scale-95 border border-cyan-700 text-cyan-200 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer">
+
+🎣 Рыбачить
 
 </button>
 
@@ -380,7 +429,7 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
 <div id="custom-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
 
-<div id="modal-content" class="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in duration-200">
+<div id="modal-content" class="modal-scroll bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-4 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in duration-200">
 
 <h3 id="modal-title" class="text-lg font-bold text-amber-400">Заголовок</h3>
 
@@ -427,6 +476,8 @@ dogFollowing: false,
 radioFound: false,
 radioReports: [],
 activeRadioReport: null,
+hasPaperMap: false,
+flashlightOn: false,
 
 hasBackpackEquipped: false,
 
@@ -442,6 +493,13 @@ bunkerStorage: [],
 activeLoadout: [],
 
 houseEncounters: {},
+forestHouseEnemiesRemaining: 3,
+forestHouseCleared: false,
+loneHouseFamily: {
+status: 'alive',
+foodDeadlineDay: null,
+lastSuppliesDay: null
+},
 
 activeQuest: null,
 
@@ -568,6 +626,8 @@ newState.dogFollowing = false;
 newState.radioFound = false;
 newState.radioReports = [];
 newState.activeRadioReport = null;
+newState.hasPaperMap = false;
+newState.flashlightOn = false;
 newState.hasBackpackEquipped = false;
 newState.backpackSlots = 0;
 newState.equippedBackpack = null;
@@ -577,6 +637,9 @@ newState.generatedLocations = [];
 newState.dailyResidents = {};
 newState.dailyShopQuests = {};
 newState.searchedLocations = {};
+newState.forestHouseEnemiesRemaining = 3;
+newState.forestHouseCleared = false;
+newState.loneHouseFamily = { status: 'alive', foodDeadlineDay: null, lastSuppliesDay: null };
 newState.notesText = 'Планы на выживание:';
 openGame(newState, slotIndex);
 saveCurrentGame();
@@ -634,6 +697,7 @@ const locationsData = [
 const routeTimes = {
 '0-1': 15,
 '0-2': 45,
+'0-3': 90,
 '2-3': 90,
 '3-2': 90,
 '1-7': 30,
@@ -642,6 +706,8 @@ const routeTimes = {
 '3-5': 10,
 '3-6': 10,
 '3-9': 10,
+'3-8': 120,
+'7-8': 180,
 };
 
 const weatherData = {
@@ -670,6 +736,15 @@ let remainingMinutes = String(minutes % 60).padStart(2, '0');
 return `${hours}:${remainingMinutes}`;
 }
 
+function getTimeOfDayLabel() {
+ensureTimeState();
+let hour = Math.floor((state.timeMinutes % 1440) / 60);
+if (hour >= 6 && hour < 12) return 'утро';
+if (hour >= 12 && hour < 18) return 'день';
+if (hour >= 18 && hour < 22) return 'вечер';
+return 'ночь';
+}
+
 function getRouteMinutes(fromId, toId) {
 let direct = routeTimes[`${fromId}-${toId}`];
 let reverse = routeTimes[`${toId}-${fromId}`];
@@ -696,6 +771,9 @@ const itemCatalog = [
 { name: "Батарейки", type: "Материал", size: 1, desc: "Подходят для фонарика и радио.", locations: { bunker: 16, forest: 10, house: 18, village: 15, lake: 6 } },
 { name: "Разбитое радио", type: "Инструмент", size: 2, desc: "Требует ремонта. Поймает ли сигнал?", dismantle: [{ name: "Изолента", count: 1 }, { name: "Металлический лом", count: 1 }], locations: { bunker: 10, forest: 4, house: 12, village: 10, lake: 5 } },
 { name: "Удочки", type: "Инструмент", size: 2, desc: "Для рыбалки на озере.", dismantle: [{ name: "Веревка", count: 1 }, { name: "Проволока", count: 1 }], locations: { bunker: 8, forest: 4, house: 5, village: 5, lake: 25 } },
+{ name: "Сырая рыба", type: "Материал", size: 1, rawFood: true, desc: "Свежий улов. Нельзя есть сырой.", locations: { bunker: 1, forest: 1, house: 1, village: 1, lake: 1 } },
+{ name: "Сковорода", type: "Посуда", size: 2, cookware: true, desc: "Нужна для приготовления рыбы.", locations: { bunker: 8, forest: 10, house: 14, village: 12, lake: 4 } },
+{ name: "Кастрюля", type: "Посуда", size: 2, cookware: true, desc: "Нужна для приготовления рыбы.", locations: { bunker: 8, forest: 12, house: 16, village: 10, lake: 5 } },
 { name: "Нож", type: "Инструмент", size: 1, desc: "Полезен в быту и на вылазке.", dismantle: [{ name: "Металлический лом", count: 1 }], locations: { bunker: 12, forest: 15, house: 14, village: 14, lake: 8 } },
 { name: "Топор", type: "Оружие", size: 2, desc: "Тяжелый инструмент и оружие.", dismantle: [{ name: "Металлический лом", count: 2 }, { name: "Ткань", count: 1 }], locations: { bunker: 5, forest: 12, house: 10, village: 14, lake: 5 } },
 { name: "Пистолет", type: "Оружие", size: 2, desc: "Опасное оружие. Боеприпасы нужно найти отдельно.", dismantle: [{ name: "Металлический лом", count: 2 }], locations: { bunker: 3, forest: 2, house: 5, village: 12, lake: 2 } },
@@ -707,6 +785,7 @@ const itemCatalog = [
 { name: "Фильтр для воды", type: "Снаряжение", size: 1, desc: "Очищает найденную воду.", locations: { bunker: 8, forest: 4, house: 8, village: 12, lake: 12 } },
 { name: "Спички", type: "Инструмент", size: 1, desc: "Разжигают огонь в безопасном месте.", dismantle: [{ name: "Древесина", count: 1 }], locations: { bunker: 18, forest: 12, house: 22, village: 14, lake: 10 } },
 { name: "Канистра топлива", type: "Ресурс", size: 2, desc: "Топливо для генератора или лодки.", locations: { bunker: 5, forest: 4, house: 8, village: 18, lake: 20 } },
+{ name: "Бумажная карта", type: "Карта", size: 1, mapUnlock: true, desc: "Открывает дальние дороги и центр Топара.", locations: { bunker: 22, forest: 3, house: 4, village: 2, lake: 5 } },
 { name: "Проволока", type: "Материал", size: 1, desc: "Годится для ловушек и ремонта.", locations: { bunker: 15, forest: 15, house: 17, village: 16, lake: 8 } },
 { name: "Сухари", type: "Еда", size: 1, count: 1, desc: "Простой, но питательный запас.", locations: { bunker: 14, forest: 12, house: 18, village: 15, lake: 10 } },
 { name: "Чистая вода", type: "Вода", size: 1, liters: 1, desc: "Питьевая вода.", locations: { bunker: 16, forest: 10, house: 16, village: 12, lake: 18 } }
@@ -805,7 +884,10 @@ return;
 let residents = state.dailyResidents[location.id] || [];
 let quests = getRoadShopQuests(location);
 let residentText = residents.length ? residents.map(resident => `${resident.name} (${resident.attitude})`).join(', ') : 'Сегодня у магазина никого нет';
-let html = `<p class="text-xs text-slate-400">Жители сегодня: <span class="text-amber-300">${residentText}</span></p><div class="space-y-2 mt-3">`;
+let mapOffer = state.hasPaperMap
+? '<div class="bg-emerald-950/40 border border-emerald-800 p-3 rounded-lg text-xs text-emerald-300">Бумажная карта уже у вас.</div>'
+: '<div class="bg-slate-950 border border-amber-800/70 p-3 rounded-lg"><div class="font-semibold text-amber-300 text-sm">Бумажная карта</div><div class="text-xs text-slate-400 mt-1">Открывает центр Топара и дальние дороги. Цена: металлический лом ×2.</div><button onclick="buyPaperMap()" class="mt-2 bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Купить карту</button></div>';
+let html = `<p class="text-xs text-slate-400">Жители сегодня: <span class="text-amber-300">${residentText}</span></p><div class="space-y-2 mt-3">${mapOffer}`;
 quests.forEach((quest, index) => {
 let status = state.activeQuest ? 'Завершите текущее задание' : 'Взять';
 html += `<div class="bg-slate-950 border border-slate-800 p-3 rounded-lg"><div class="font-semibold text-slate-200 text-sm">${quest.itemName} → ${quest.target}</div><div class="text-xs text-slate-400 mt-1">Награда: ${quest.rewardType === 'heal' ? `здоровье +${quest.reward}%` : `${quest.rewardItem} ×${quest.rewardCount}`}</div><button onclick="acceptShopQuest(${index})" class="mt-2 bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">${status}</button></div>`;
@@ -829,6 +911,29 @@ closeModal();
 updateUI();
 }
 
+function buyPaperMap() {
+let location = getCurrentRoadLocation();
+if (!location || !location.shopAvailable || state.hasPaperMap) return;
+let required = 2;
+let available = state.bunkerStorage.filter(item => item.name === 'Металлический лом').reduce((sum, item) => sum + (item.count || 1), 0);
+if (available < required) {
+showModal('Не хватает оплаты', 'Для покупки бумажной карты нужны металлический лом ×2 на складе бункера.', [{ text: 'ОК', className: 'bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+for (let index = state.bunkerStorage.length - 1; index >= 0 && required > 0; index--) {
+let item = state.bunkerStorage[index];
+if (item.name !== 'Металлический лом') continue;
+let consumed = Math.min(item.count || 1, required);
+required -= consumed;
+if (item.count) item.count -= consumed;
+if (!item.count || item.count <= 0) state.bunkerStorage.splice(index, 1);
+}
+state.hasPaperMap = true;
+addLog('Вы купили бумажную карту. Дальние дороги и центр Топара открыты.', 'success');
+closeModal();
+updateUI();
+}
+
 function exploreRandomRoad() {
 ensureExplorationState();
 let currentLocationId = getCurrentLocationId();
@@ -839,6 +944,12 @@ return;
 
 let searchMinutes = randomInt(70, 110);
 if (!spendActionTime(searchMinutes, 'Исследование дальней дороги')) return;
+
+if (Math.random() < 0.25) {
+addLog(`Исследование провалилось. Вы потратили ${searchMinutes} минут, но не нашли безопасного пути и вернулись ни с чем.`, 'danger');
+updateUI();
+return;
+}
 
 let template = getRandomRoadLocationTemplate();
 let locationId = locationsData.reduce((highestId, location) => Math.max(highestId, location.id), 0) + 1;
@@ -860,6 +971,7 @@ locationsData.push(generatedLocation);
 state.generatedLocations.push(generatedLocation);
 state.dailyResidents[locationId] = chooseRoadResidents(generatedLocation);
 routeTimes[`${currentLocationId}-${locationId}`] = routeMinutes;
+routeTimes[`${locationId}-${currentLocationId}`] = routeMinutes;
 state.location = generatedLocation.name;
 addLog(`Вы исследовали дорогу ${searchMinutes} минут и обнаружили новую локацию: <b>${generatedLocation.name}</b>.`, 'success');
 addLog(`До неё около ${routeMinutes} минут пути. Здесь можно осмотреться и поискать припасы.`);
@@ -905,13 +1017,39 @@ return storage;
 function ensureExplorationState() {
 if (!state.searchedLocations) state.searchedLocations = {};
 if (!state.houseEncounters) state.houseEncounters = {};
+for (let items of [state.activeLoadout, state.bunkerStorage]) {
+if (!Array.isArray(items)) continue;
+items.forEach(item => {
+if (item.name === 'Свежая рыба') {
+item.name = 'Сырая рыба';
+item.type = 'Материал';
+item.rawFood = true;
+item.desc = 'Свежий улов. Нельзя есть сырой.';
+}
+});
+}
+if (typeof state.forestHouseEnemiesRemaining !== 'number') state.forestHouseEnemiesRemaining = 3;
+if (typeof state.forestHouseCleared !== 'boolean') state.forestHouseCleared = state.forestHouseEnemiesRemaining <= 0;
+if (!state.loneHouseFamily || typeof state.loneHouseFamily !== 'object') {
+state.loneHouseFamily = { status: 'alive', foodDeadlineDay: null, lastSuppliesDay: null };
+}
+if (!['alive', 'dead'].includes(state.loneHouseFamily.status)) state.loneHouseFamily.status = 'alive';
+if (!Object.prototype.hasOwnProperty.call(state.loneHouseFamily, 'foodDeadlineDay')) state.loneHouseFamily.foodDeadlineDay = null;
+if (!Object.prototype.hasOwnProperty.call(state.loneHouseFamily, 'lastSuppliesDay')) state.loneHouseFamily.lastSuppliesDay = null;
 if (!Object.prototype.hasOwnProperty.call(state, 'activeQuest')) state.activeQuest = null;
+if (!Object.prototype.hasOwnProperty.call(state, 'hasPaperMap')) state.hasPaperMap = false;
 if (!Array.isArray(state.generatedLocations)) state.generatedLocations = [];
 if (!state.dailyResidents || typeof state.dailyResidents !== 'object') state.dailyResidents = {};
 if (!state.dailyShopQuests || typeof state.dailyShopQuests !== 'object') state.dailyShopQuests = {};
 state.generatedLocations.forEach(location => {
 if (!locationsData.some(existingLocation => existingLocation.id === location.id)) locationsData.push(location);
-if (location.originId !== undefined) routeTimes[`${location.originId}-${location.id}`] = location.routeMinutes;
+if (location.originId !== undefined) {
+const routeMinutes = Number(location.routeMinutes || 0);
+if (routeMinutes > 0) {
+routeTimes[`${location.originId}-${location.id}`] = routeMinutes;
+routeTimes[`${location.id}-${location.originId}`] = routeMinutes;
+}
+}
 });
 }
 
@@ -977,9 +1115,10 @@ if (!item.count || item.count <= 0) state.bunkerStorage.splice(index, 1);
 
 
 function getMaxSlots() {
-
-return 4 + (state.backpackSlots || (state.hasBackpackEquipped ? 2 : 0));
-
+if (state.hasBackpackEquipped) {
+return 4 + (state.backpackSlots || 2);
+}
+return 4;
 }
 
 
@@ -991,6 +1130,11 @@ return state.activeLoadout.reduce((sum, item) => sum + (item.size || 1), 0);
 }
 
 function addFoundItem(item) {
+if (item.mapUnlock) {
+state.hasPaperMap = true;
+addLog('Вы нашли бумажную карту. Дальние дороги и центр Топара отмечены на схеме.', 'success');
+return;
+}
 let itemSize = item.size || 1;
 if (getCurrentLoadoutSize() + itemSize <= getMaxSlots()) {
 state.activeLoadout.push(item);
@@ -1074,7 +1218,10 @@ document.getElementById('custom-modal').classList.remove('hidden');
 
 
 function closeModal() {
-
+const modalContent = document.getElementById('modal-content');
+modalContent.style.maxWidth = '';
+modalContent.style.width = '';
+modalContent.classList.remove('map-modal');
 document.getElementById('custom-modal').classList.add('hidden');
 
 }
@@ -1095,7 +1242,7 @@ document.getElementById('stat-hunger').innerText = `${state.hunger}%`;
 document.getElementById('stat-thirst').innerText = `${state.thirst}%`;
 
 document.getElementById('stat-health').innerText = `${state.health}%`;
-document.getElementById('stat-time').innerText = formatGameTime();
+document.getElementById('stat-time').innerText = `${formatGameTime()} · ${getTimeOfDayLabel()}`;
 document.getElementById('stat-weather').innerText = state.weather;
 document.getElementById('stat-fatigue').innerText = `${state.fatigue}%`;
 
@@ -1106,6 +1253,11 @@ document.getElementById('bunker-storage-panel').classList.toggle('hidden', !isIn
 document.getElementById('crafting-button').classList.toggle('hidden', !isInBunker);
 document.getElementById('rest-button').classList.toggle('hidden', !isInBunker);
 document.getElementById('wait-button').classList.toggle('hidden', isInBunker);
+let canFish = state.location.includes('Лесное озеро') && state.activeLoadout.some(item => item.name === 'Удочки');
+document.getElementById('fish-button').classList.toggle('hidden', !canFish);
+let hasRawFish = state.activeLoadout.some(item => item.rawFood) || state.bunkerStorage.some(item => item.rawFood);
+let hasCookware = state.activeLoadout.some(item => item.cookware) || state.bunkerStorage.some(item => item.cookware);
+document.getElementById('cook-button').classList.toggle('hidden', !isInBunker || !hasRawFish || !hasCookware);
 document.getElementById('end-day-button').classList.toggle('hidden', !isInBunker);
 ensureExplorationState();
 let currentRoadLocation = getCurrentRoadLocation();
@@ -1546,54 +1698,181 @@ addLog('Вы подождали 15 минут. Сытость и жажда не
 updateUI();
 }
 
+function getAvailableCans() {
+return [...state.activeLoadout, ...state.bunkerStorage]
+.filter(item => item.name === 'Консервы' && item.count > 0)
+.reduce((sum, item) => sum + item.count, 0);
+}
+
+function consumeCans(amount) {
+let remaining = amount;
+for (let items of [state.activeLoadout, state.bunkerStorage]) {
+for (let index = items.length - 1; index >= 0 && remaining > 0; index--) {
+let item = items[index];
+if (item.name !== 'Консервы' || item.count <= 0) continue;
+let consumed = Math.min(item.count, remaining);
+item.count -= consumed;
+remaining -= consumed;
+if (item.count <= 0) items.splice(index, 1);
+}
+}
+return remaining === 0;
+}
+
+function fishAtLake() {
+if (!state.location.includes('Лесное озеро')) return;
+if (!state.activeLoadout.some(item => item.name === 'Удочки')) {
+showModal('Нужна удочка', 'Возьмите удочки с собой в экипировку, чтобы рыбачить на озере.', [{ text: 'ОК', className: 'bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+if (!spendActionTime(90, 'Рыбалка')) return;
+state.hunger = Math.max(0, state.hunger - 2);
+if (Math.random() < 0.7) {
+let fish = { id: Date.now() + Math.random(), name: 'Сырая рыба', type: 'Материал', size: 1, rawFood: true, desc: 'Свежий улов. Нельзя есть сырой.' };
+addFoundItem(fish);
+addLog('Поплавок дрогнул. Вы поймали сырую рыбу и убрали улов в экипировку.', 'success');
+} else {
+addLog('Полтора часа у воды прошли без улова. В следующий раз может повезти больше.', 'info');
+}
+updateUI();
+}
+
+function cookFish() {
+if (state.location !== 'Бункер (Убежище)') return;
+let fishSource = state.activeLoadout.find(item => item.rawFood) || state.bunkerStorage.find(item => item.rawFood);
+let cookware = state.activeLoadout.find(item => item.cookware) || state.bunkerStorage.find(item => item.cookware);
+if (!fishSource || !cookware) {
+showModal('Нужны рыба и посуда', 'Для готовки в бункере нужны сырая рыба и найденная сковорода или кастрюля.', [{ text: 'ОК', className: 'bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+if (!spendActionTime(30, 'Приготовление рыбы')) return;
+let sourceItems = state.activeLoadout.includes(fishSource) ? state.activeLoadout : state.bunkerStorage;
+sourceItems.splice(sourceItems.indexOf(fishSource), 1);
+state.bunkerStorage.push({ id: Date.now() + Math.random(), name: 'Приготовленная рыба', type: 'Еда', size: 1, count: 1, desc: 'Готовая еда. Восстанавливает сытость.' });
+let cookwareLabel = cookware.name === 'Кастрюля' ? 'кастрюле' : 'сковороде';
+addLog(`Вы приготовили рыбу на ${cookwareLabel}. Посуду можно использовать снова.`, 'success');
+updateUI();
+}
+
+function getHubTravelMinutes(targetId) {
+if (targetId === 0) return 0;
+let queue = [{ id: 0, minutes: 0 }];
+let visited = new Set([0]);
+while (queue.length) {
+let current = queue.shift();
+let neighbors = Object.entries(routeTimes).flatMap(([key, minutes]) => {
+let [from, to] = key.split('-').map(Number);
+if (from === current.id) return [{ id: to, minutes }];
+if (to === current.id) return [{ id: from, minutes }];
+return [];
+});
+for (let neighbor of neighbors) {
+if (visited.has(neighbor.id)) continue;
+if (neighbor.id === targetId) return current.minutes + neighbor.minutes;
+visited.add(neighbor.id);
+queue.push({ id: neighbor.id, minutes: current.minutes + neighbor.minutes });
+}
+}
+return null;
+}
+
+function formatTravelMinutes(minutes) {
+if (minutes === null) return 'маршрут неизвестен';
+if (minutes < 60) return `${minutes} мин.`;
+let hours = Math.floor(minutes / 60);
+let remainingMinutes = minutes % 60;
+return remainingMinutes ? `${hours} ч ${remainingMinutes} мин.` : `${hours} ч`;
+}
+
+function getMapStatus(locationId) {
+return {
+1: 'Мирный',
+2: 'Мирный',
+3: 'Поселок',
+7: 'Спокойно',
+8: 'Опасно'
+}[locationId] || 'Неизвестно';
+}
+
 
 
 function openLocationModal() {
 
-let listHtml = '<div class="space-y-2 max-h-64 overflow-y-auto pr-1">';
-let currentLocationId = getCurrentLocationId();
 ensureExplorationState();
+const modalContent = document.getElementById('modal-content');
+modalContent.classList.add('map-modal');
+modalContent.style.maxWidth = 'min(96vw, 1200px)';
+modalContent.style.width = 'min(96vw, 1200px)';
 
-locationsData.filter(loc => loc.id !== currentLocationId && !loc.villageHouse && !loc.villageShop).forEach(loc => {
-let routeMinutes = getRouteMinutes(currentLocationId, loc.id);
-let routeLabel = routeMinutes ? `${routeMinutes} мин. в одну сторону` : 'Неизвестно: маршрут появится позже';
-let routeButton = routeMinutes
-? `<button onclick="travelTo(${loc.id})" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer">Идти</button>`
-: '<span class="text-xs text-slate-500 whitespace-nowrap">Туман войны</span>';
-
-listHtml += `
-
-<div class="bg-slate-950 border border-slate-800 p-3 rounded-lg flex items-center justify-between gap-2 hover:border-slate-600 transition">
-
-<div>
-
-<div class="font-semibold text-slate-200 text-sm">${loc.name}</div>
-
-<div class="text-xs text-slate-400">${loc.desc}</div>
-
-<div class="text-[10px] text-cyan-400 mt-1">${routeLabel}</div>
-
-</div>
-
-${routeButton}
-
-</div>
-
-`;
-
+let currentLocationId = getCurrentLocationId();
+const staticNodes = [
+{ id: 0, x: 16, y: 62, shortName: 'Бункер', color: 'cyan' },
+{ id: 1, x: 35, y: 28, shortName: 'Дом в лесу', color: 'emerald' },
+{ id: 2, x: 35, y: 78, shortName: 'Одинокий дом', color: 'emerald' },
+{ id: 3, x: 58, y: 62, shortName: 'Малая Токмачка', color: 'amber' },
+{ id: 7, x: 58, y: 22, shortName: 'Лесное озеро', color: 'sky' },
+{ id: 8, x: 84, y: 42, shortName: 'Топар', color: 'rose' }
+];
+const nodeById = Object.fromEntries(staticNodes.map(node => [node.id, node]));
+const generatedNodes = locationsData.filter(location => location.generated).map((location, index) => {
+const originNode = nodeById[location.originId] || nodeById[3];
+const driftX = (index % 2 === 0 ? 1 : -1) * (10 + (Math.floor(index / 2) * 6));
+const driftY = (index % 3 === 0 ? 1 : -1) * (8 + (Math.floor(index / 2) * 7));
+return {
+ id: location.id,
+ x: Math.min(90, Math.max(12, originNode.x + driftX)),
+ y: Math.min(88, Math.max(12, originNode.y + driftY)),
+ shortName: location.name.split(' (')[0].slice(0, 18),
+ color: index % 2 === 0 ? 'sky' : 'amber'
+};
 });
-
-if (currentLocationId === 3 || locationsData[currentLocationId]?.generated) {
-listHtml += `<div class="bg-emerald-950/40 border border-emerald-800 p-3 rounded-lg flex items-center justify-between gap-2"><div><div class="font-semibold text-emerald-300 text-sm">Исследовать дорогу дальше</div><div class="text-xs text-slate-400">Отправиться дальше от Малой Токмачки и найти случайную локацию.</div><div class="text-[10px] text-emerald-400 mt-1">70–110 минут · новая точка появится на карте</div></div><button onclick="exploreRandomRoad()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer">Исследовать</button></div>`;
+let mapNodes = [...staticNodes, ...generatedNodes];
+let mapEdges = [];
+let seenEdges = new Set();
+Object.entries(routeTimes).forEach(([key, minutes]) => {
+if (!minutes || minutes <= 0) return;
+const [fromId, toId] = key.split('-').map(Number);
+if (!mapNodes.some(node => node.id === fromId) || !mapNodes.some(node => node.id === toId)) return;
+const edgeKey = `${Math.min(fromId, toId)}-${Math.max(fromId, toId)}`;
+if (seenEdges.has(edgeKey)) return;
+seenEdges.add(edgeKey);
+mapEdges.push([fromId, toId]);
+});
+if (mapEdges.length === 0) {
+mapEdges = [[0, 1], [0, 2], [0, 3], [2, 3], [1, 7], [3, 7], [3, 8], [7, 8]];
 }
+let nodeLookup = Object.fromEntries(mapNodes.map(node => [node.id, node]));
+let mapWidth = 1000;
+let mapHeight = 420;
+let svg = `<svg viewBox="0 0 ${mapWidth} ${mapHeight}" class="absolute inset-0 h-full w-full" aria-hidden="true">`;
+mapEdges.forEach(([fromId, toId]) => {
+let from = nodeLookup[fromId];
+let to = nodeLookup[toId];
+if (!from || !to) return;
+let known = (fromId !== 8 && toId !== 8) || state.hasPaperMap;
+svg += `<line x1="${from.x * 10}" y1="${from.y * 3.6}" x2="${to.x * 10}" y2="${to.y * 3.6}" class="map-route ${known ? 'known' : ''}" />`;
+});
+svg += '</svg>';
 
-if (currentLocationId === 7) {
-listHtml += `<div class="bg-slate-950 border border-slate-800 p-3 rounded-lg flex items-center justify-between gap-2 opacity-70"><div><div class="font-semibold text-slate-400 text-sm">Неизвестно</div><div class="text-xs text-slate-500">Дальняя дорога скрыта туманом войны.</div></div><span class="text-xs text-slate-500">Будущий патч</span></div>`;
-}
+let nodesHtml = mapNodes.map(node => {
+let isHidden = node.id === 8 && !state.hasPaperMap;
+let routeMinutes = getRouteMinutes(currentLocationId, node.id);
+let hubMinutes = getHubTravelMinutes(node.id);
+let canTravel = !isHidden && node.id !== currentLocationId && routeMinutes;
+let title = isHidden ? '???' : node.shortName;
+let status = isHidden ? 'Туман войны' : (node.id === currentLocationId ? 'Вы здесь' : getMapStatus(node.id));
+let hubLabel = isHidden ? '??? от бункера' : `от бункера · ${formatTravelMinutes(hubMinutes)}`;
+let action = canTravel
+? `<button onclick="travelTo(${node.id})" class="mt-1 w-full bg-blue-600 hover:bg-blue-500 text-white px-1.5 py-1 rounded text-[10px] leading-tight font-semibold cursor-pointer">Идти · ${routeMinutes} мин</button>`
+: `<span class="mt-1 block text-[10px] leading-tight ${isHidden ? 'text-slate-500' : 'text-slate-400'}">${status}</span>`;
+return `<div class="map-node ${node.id === currentLocationId ? 'current' : ''} ${isHidden ? 'unknown' : ''} absolute rounded-lg border border-${node.color}-700/70 bg-slate-950/95 px-1.5 py-1.5 text-center text-slate-200" style="left:${node.x}%;top:${node.y}%"><div class="map-label">${title}</div><div class="map-meta mt-0.5 text-cyan-300">${hubLabel}</div>${action}</div>`;
+}).join('');
 
-listHtml += '</div>';
-
-showModal("Выбор маршрута вылазки", listHtml, [{ text: "Закрыть", className: "bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer" }]);
+let exploreAction = (currentLocationId === 3 || locationsData[currentLocationId]?.generated)
+? `<button onclick="exploreRandomRoad()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Исследовать дорогу</button>`
+: '';
+let mapHtml = `<div class="space-y-3 overflow-hidden"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><p class="text-sm text-slate-200">${state.hasPaperMap ? 'Дальние маршруты открыты.' : 'Дальние маршруты скрыты туманом войны.'}</p><p class="text-[10px] text-slate-500 mt-1">Время указано от бункера; погода может его увеличить.</p></div>${exploreAction}</div><div class="map-board relative h-[58vh] min-h-[340px] max-h-[70vh] overflow-hidden rounded-xl border border-slate-800">${svg}${nodesHtml}</div><div class="grid grid-cols-2 gap-2 text-[10px] text-slate-400"><span>● Мирный маршрут</span><span>● Опасная зона</span><span>━━ открытая дорога</span><span>┅┅ туман войны</span></div></div>`;
+showModal('Карта маршрутов', mapHtml, [{ text: 'Закрыть', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
 
 }
 
@@ -1685,7 +1964,7 @@ closeModal();
 
 ensureTimeState();
 
-const target = locationsData[locId];
+const target = locationsData.find(location => location.id === locId);
 let currentLocationId = getCurrentLocationId();
 let baseMinutes = getRouteMinutes(currentLocationId, locId);
 
@@ -1768,6 +2047,25 @@ updateUI();
 return;
 }
 
+if (locationName === 'Справа: Дом в лесу') {
+if (!state.forestHouseCleared) {
+showModal('Дом еще охраняют', `Внутри остались опасные бабки: ${state.forestHouseEnemiesRemaining}. Сначала зачистите дом.`, [{ text: 'Понятно', className: 'bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+if (!state.searchedLocations[locationName]) {
+if (!spendActionTime(30, 'Обыск дома в лесу')) return;
+state.searchedLocations[locationName] = true;
+addFoundItem(createItem(itemCatalog.find(item => item.name === 'Ружье')));
+addFoundItem(createItem(itemCatalog.find(item => item.name === 'Разбитое радио')));
+state.radioFound = true;
+addLog('После зачистки вы обыскали дом и нашли дробовик и разбитое радио.', 'success');
+} else {
+addLog('В доме уже нашли все ценные предметы.');
+}
+updateUI();
+return;
+}
+
 if (state.searchedLocations[locationName]) {
 showModal('Здесь уже обыскивали', 'В этом месте больше ничего полезного найти не удалось.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold' }]);
 return;
@@ -1818,6 +2116,11 @@ else addLog('Сегодняшние посетители ещё не появи�
 return;
 }
 
+if (targetName === 'Слева: Одинокий дом') {
+openLoneHouseEncounter();
+return;
+}
+
 if (targetName.includes("Дом 1 с капкан")) {
 if (roll > 0.4) {
 state.health -= 15;
@@ -1839,7 +2142,7 @@ addLog(`Вы навестили пустой дом, вас приветству
 }
 } else if (targetName.includes("Лесное озеро")) {
 addLog(`На дороге мимо вас промчались двое дедов на велосипедах. У озера видны причал, лодка и старый рыбацкий дом.`);
-} else if (targetName.includes("Дом в лесу") || targetName.includes("Одинокий дом")) {
+} else if (targetName.includes("Дом в лесу")) {
 addLog(`Здание выглядит заброшенным. Здесь можно поискать припасы.`);
 } else {
 if (roll > 0.5) {
@@ -1850,6 +2153,88 @@ state.health -= 20;
 }
 }
 if (targetName.includes("Дом") && !targetName.includes("Дом 3 с псом")) openNpcEncounter(targetName);
+}
+
+function openLoneHouseEncounter() {
+ensureExplorationState();
+let family = state.loneHouseFamily;
+if (family.status === 'dead') {
+addLog('В одиноком доме тихо. Семья не пережила голод.', 'danger');
+showModal('Одинокий дом', '<p>В доме вы нашли семью мертвой. Вы не успели помочь им.</p>', [{ text: 'Уйти', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+
+maybeShareLoneHouseSupplies();
+
+let canShare = getAvailableCans() >= 2;
+let daysLeft = family.foodDeadlineDay === null ? null : Math.max(0, family.foodDeadlineDay - state.day);
+let isSupportedFamily = family.lastSuppliesDay !== null;
+let statusText = isSupportedFamily
+? 'Семья выжила и продолжает жить в доме. Они благодарят вас за помощь.'
+: family.foodDeadlineDay === null
+? 'У них почти закончилась еда. Они просят помощи, пока еще не поздно.'
+: `Семья ждет помощи. До голодной смерти осталось дней: ${daysLeft}.`;
+let familyQuote = isSupportedFamily
+? '«Мы живы благодаря вам. Заглядывайте иногда — если будут излишки, мы поделимся».'
+: '«У нас почти не осталось еды. Если не найдете для нас припасы, через пару дней мы умрем».';
+let shareButton = !isSupportedFamily && canShare
+? { text: 'Поделиться 2 консервами', className: 'bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: feedLoneHouseFamily }
+ : !isSupportedFamily
+ ? { text: 'Нужны 2 консервы', className: 'bg-slate-700 text-slate-400 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }
+ : { text: 'Припасов пока нет', className: 'bg-slate-700 text-slate-400 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' };
+let leaveButton = family.foodDeadlineDay === null
+? { text: 'Уйти', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: postponeLoneHouseHelp }
+: { text: 'Уйти', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' };
+showModal('Семья в одиноком доме', `<p>Внутри живет мирная семья. Они говорят:</p><p class="mt-2 text-amber-300 italic">${familyQuote}</p><p class="mt-2 text-xs text-slate-400">${statusText}</p>${isSupportedFamily ? '' : '<p class="mt-2 text-xs text-slate-400">Чтобы помочь, нужны две консервы.</p>'}`, [
+shareButton,
+{ text: 'Напасть', className: 'bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: attackLoneHouseFamily },
+leaveButton
+]);
+}
+
+function postponeLoneHouseHelp() {
+if (state.loneHouseFamily.foodDeadlineDay === null) {
+state.loneHouseFamily.foodDeadlineDay = state.day + 2;
+addLog('Вы ушли из одинокого дома. Семья будет ждать еду еще два дня.', 'info');
+}
+}
+
+function feedLoneHouseFamily() {
+if (state.loneHouseFamily.status !== 'alive' || getAvailableCans() < 2 || !consumeCans(2)) return;
+state.loneHouseFamily.foodDeadlineDay = null;
+state.loneHouseFamily.lastSuppliesDay = state.day;
+addLog('Вы отдали семье две консервы. Они выжили и обещали иногда делиться припасами.', 'success');
+showModal('Помощь принята', '<p>Семья благодарит вас и обещает продолжать жить в доме.</p><p class="mt-2 text-emerald-300">Когда у них появятся излишки, они смогут передать вам припасы.</p>', [{ text: 'Уйти', className: 'bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+updateUI();
+}
+
+function attackLoneHouseFamily() {
+state.loneHouseFamily.status = 'dead';
+state.loneHouseFamily.foodDeadlineDay = null;
+state.houseEncounters[state.location] = 'hostile';
+let familyProfile = { name: 'семью в одиноком доме', attitude: 'мирно', attack: 0.35, listen: 0.6, escape: 0.7 };
+attackNpc(familyProfile);
+}
+
+function processLoneHouseFamilyDay() {
+let family = state.loneHouseFamily;
+if (family.status !== 'alive' || family.foodDeadlineDay === null) return;
+if (state.day >= family.foodDeadlineDay) {
+family.status = 'dead';
+addLog('Семья в одиноком доме не дождалась еды и умерла от голода.', 'danger');
+}
+}
+
+function maybeShareLoneHouseSupplies() {
+let family = state.loneHouseFamily;
+if (family.status !== 'alive' || family.lastSuppliesDay === null || state.day - family.lastSuppliesDay < 3) return false;
+let supply = Math.random() < 0.65
+? { name: 'Консервы', size: 1, type: 'Еда', count: 1, desc: 'Запас, которым поделилась семья.' }
+: { name: 'Бутыль воды', size: 1, type: 'Вода', liters: 1, desc: 'Запас, которым поделилась семья.' };
+state.bunkerStorage.push({ id: Date.now() + Math.random(), ...supply });
+family.lastSuppliesDay = state.day;
+addLog(`Семья из одинокого дома поделилась припасами: <b>${supply.name}</b>.`, 'success');
+return true;
 }
 
 function getNpcProfile(locationName) {
@@ -1879,6 +2264,10 @@ return true;
 
 function openNpcEncounter(locationName) {
 ensureExplorationState();
+if (locationName === 'Справа: Дом в лесу') {
+openForestHouseEncounter();
+return;
+}
 if (state.houseEncounters[locationName]) return;
 state.houseEncounters[locationName] = true;
 let npc = getNpcProfile(locationName);
@@ -1965,6 +2354,55 @@ addLog(`Поручение завершено. Вы получили: <b>${quest
 }
 state.activeQuest = null;
 }
+}
+
+function openForestHouseEncounter() {
+ensureExplorationState();
+if (state.forestHouseCleared) return;
+let remaining = state.forestHouseEnemiesRemaining;
+let html = `<p>В доме вас встречают <b>три опасные бабки</b>, вооруженные и готовые защищать припасы.</p><p class="mt-2 text-xs text-slate-400">Осталось противниц: <span class="text-rose-300 font-bold">${remaining}</span>. После победы дом можно будет обыскать.</p>`;
+showModal('Опасные бабки в доме', html, [
+{ text: 'Напасть', className: 'bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: attackForestHouse, keepOpen: true },
+{ text: 'Уйти', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }
+]);
+}
+
+function attackForestHouse() {
+closeModal();
+let combat = getCombatWeapon();
+if (!combat) {
+showModal('Нужно оружие', 'Для боя с опасными бабками нужен нож, пистолет или ружье.', [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+let weaponName = combat.item.name;
+if (weaponName !== 'Нож' && !combat.ammo) {
+showModal('Нет патронов', `${weaponName} нельзя использовать без патронов.`, [{ text: 'ОК', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+return;
+}
+let chance = weaponName === 'Нож' ? 0.58 : weaponName === 'Пистолет' ? 0.68 : 0.8;
+chance += Math.min(0.08, combat.ammo * 0.02);
+if (state.dogTamed && state.dogFollowing) chance += 0.06;
+if (weaponName !== 'Нож') consumeCombatAmmo();
+if (Math.random() < chance) {
+state.forestHouseEnemiesRemaining = Math.max(0, state.forestHouseEnemiesRemaining - 1);
+addLog(`Вы победили одну из опасных бабок. Осталось: ${state.forestHouseEnemiesRemaining}.`, 'success');
+if (state.forestHouseEnemiesRemaining === 0) {
+state.forestHouseCleared = true;
+state.houseEncounters[state.location] = 'cleared';
+showModal('Дом зачищен', 'Все три опасные бабки повержены. Теперь можно обыскать дом и забрать дробовик с радио.', [{ text: 'Продолжить', className: 'bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
+updateUI();
+return;
+}
+} else {
+let damage = randomInt(12, 24);
+state.health = Math.max(0, state.health - damage);
+addLog(`Бабки отбились. Вы получили ${damage}% урона.`, 'danger');
+}
+updateUI();
+showModal('Бой продолжается', `<p>Шанс победить в атаке был ${Math.round(chance * 100)}%.</p><p class="mt-2 text-amber-300">Осталось противниц: ${state.forestHouseEnemiesRemaining}.</p>`, [
+{ text: 'Продолжить бой', className: 'bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer', onClick: openForestHouseEncounter, keepOpen: true },
+{ text: 'Отступить', className: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }
+]);
 }
 
 function attackNpc(npc) {
@@ -2164,7 +2602,7 @@ html += `
 
 </div>
 
-<button onclick="craftItem(${idx})" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py.5 rounded-lg text-xs font-semibold cursor-pointer">Создать</button>
+<button onclick="craftItem(${idx})" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Создать</button>
 
 </div>
 
@@ -2247,6 +2685,7 @@ state.hunger = Math.max(0, state.hunger - 15);
 state.thirst = Math.max(0, state.thirst - 20);
 state.dailyShopQuests = {};
 refreshDailyRoadResidents();
+processLoneHouseFamilyDay();
 
 
 
