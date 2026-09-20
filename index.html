@@ -509,6 +509,8 @@ dailyResidents: {},
 
 dailyShopQuests: {},
 
+lastRoadExploration: null,
+
 notesText: localStorage.getItem('bunker_notes') || "Планы на выживание:\n1. Починить радио и поймать сигнал.\n2. Найти металлолом для верстака.\n3. Остерегаться капканов у дома вредной бабки."
 
 };
@@ -636,6 +638,7 @@ newState.bunkerStorage = [];
 newState.generatedLocations = [];
 newState.dailyResidents = {};
 newState.dailyShopQuests = {};
+newState.lastRoadExploration = null;
 newState.searchedLocations = {};
 newState.forestHouseEnemiesRemaining = 3;
 newState.forestHouseCleared = false;
@@ -946,8 +949,14 @@ let searchMinutes = randomInt(70, 110);
 if (!spendActionTime(searchMinutes, 'Исследование дальней дороги')) return;
 
 if (Math.random() < 0.25) {
+state.lastRoadExploration = {
+found: false,
+searchMinutes,
+description: 'Безопасный путь найти не удалось. Попробуйте исследовать дорогу еще раз.'
+};
 addLog(`Исследование провалилось. Вы потратили ${searchMinutes} минут, но не нашли безопасного пути и вернулись ни с чем.`, 'danger');
 updateUI();
+openLocationModal();
 return;
 }
 
@@ -973,10 +982,18 @@ state.dailyResidents[locationId] = chooseRoadResidents(generatedLocation);
 routeTimes[`${currentLocationId}-${locationId}`] = routeMinutes;
 routeTimes[`${locationId}-${currentLocationId}`] = routeMinutes;
 state.location = generatedLocation.name;
+state.lastRoadExploration = {
+found: true,
+searchMinutes,
+locationName: generatedLocation.name,
+description: generatedLocation.desc,
+routeMinutes
+};
 addLog(`Вы исследовали дорогу ${searchMinutes} минут и обнаружили новую локацию: <b>${generatedLocation.name}</b>.`, 'success');
 addLog(`До неё около ${routeMinutes} минут пути. Здесь можно осмотреться и поискать припасы.`);
 triggerLoreEvent(locationId);
 updateUI();
+openLocationModal();
 }
 
 function chooseRandomItem(locationKey, excludedNames = []) {
@@ -1223,6 +1240,7 @@ modalContent.style.maxWidth = '';
 modalContent.style.width = '';
 modalContent.classList.remove('map-modal');
 document.getElementById('custom-modal').classList.add('hidden');
+state.lastRoadExploration = null;
 
 }
 
@@ -1871,7 +1889,14 @@ return `<div class="map-node ${node.id === currentLocationId ? 'current' : ''} $
 let exploreAction = (currentLocationId === 3 || locationsData[currentLocationId]?.generated)
 ? `<button onclick="exploreRandomRoad()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Исследовать дорогу</button>`
 : '';
-let mapHtml = `<div class="space-y-3 overflow-hidden"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><p class="text-sm text-slate-200">${state.hasPaperMap ? 'Дальние маршруты открыты.' : 'Дальние маршруты скрыты туманом войны.'}</p><p class="text-[10px] text-slate-500 mt-1">Время указано от бункера; погода может его увеличить.</p></div>${exploreAction}</div><div class="map-board relative h-[58vh] min-h-[340px] max-h-[70vh] overflow-hidden rounded-xl border border-slate-800">${svg}${nodesHtml}</div><div class="grid grid-cols-2 gap-2 text-[10px] text-slate-400"><span>● Мирный маршрут</span><span>● Опасная зона</span><span>━━ открытая дорога</span><span>┅┅ туман войны</span></div></div>`;
+let roadNotice = '';
+if (state.lastRoadExploration) {
+let result = state.lastRoadExploration;
+roadNotice = result.found
+? `<div class="rounded-lg border border-emerald-700/70 bg-emerald-950/50 p-3 text-sm"><div class="font-semibold text-emerald-300">Локация найдена</div><div class="mt-1 text-slate-200"><b>${result.locationName}</b></div><div class="mt-1 text-xs text-slate-300">${result.description}</div><div class="mt-1 text-xs text-cyan-300">Исследование: ${result.searchMinutes} мин. · Путь: около ${result.routeMinutes} мин.</div></div>`
+: `<div class="rounded-lg border border-rose-700/70 bg-rose-950/50 p-3 text-sm"><div class="font-semibold text-rose-300">Локация не найдена</div><div class="mt-1 text-xs text-slate-300">${result.description}</div><div class="mt-1 text-xs text-amber-300">Потрачено времени: ${result.searchMinutes} мин.</div></div>`;
+}
+let mapHtml = `<div class="space-y-3 overflow-hidden">${roadNotice}<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><p class="text-sm text-slate-200">${state.hasPaperMap ? 'Дальние маршруты открыты.' : 'Дальние маршруты скрыты туманом войны.'}</p><p class="text-[10px] text-slate-500 mt-1">Время указано от бункера; погода может его увеличить.</p></div>${exploreAction}</div><div class="map-board relative h-[58vh] min-h-[340px] max-h-[70vh] overflow-hidden rounded-xl border border-slate-800">${svg}${nodesHtml}</div><div class="grid grid-cols-2 gap-2 text-[10px] text-slate-400"><span>● Мирный маршрут</span><span>● Опасная зона</span><span>━━ открытая дорога</span><span>┅┅ туман войны</span></div></div>`;
 showModal('Карта маршрутов', mapHtml, [{ text: 'Закрыть', className: 'bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer' }]);
 
 }
